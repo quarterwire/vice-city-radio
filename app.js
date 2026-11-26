@@ -144,39 +144,86 @@ function live(st){
 let yt=null,ready=false,queued=null;
 window.onYouTubeIframeAPIReady=()=>{
   yt=new YT.Player("yt",{host:"https://www.youtube-nocookie.com",width:"100%",height:"100%",playerVars:{origin:location.origin,playsinline:1,controls:0,disablekb:1,rel:0,iv_load_policy:3,fs:0,modestbranding:1},
-    events:{onReady:()=>{ready=true;yt.setVolume(vol);if(queued){const q=queued;queued=null;q()}},onStateChange:onState,onError:onErr}});
+    events:{onReady:()=>{ready=true;yt.setVolume(vol);yt.setLoop(true);if(queued){const q=queued;queued=null;q()}},onStateChange:onState,onError:onErr}});
 };
 let ytAsked=false;
-function loadYT(){if(ytAsked)return;ytAsked=true;const s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";s.async=true;s.onerror=()=>toast("Couldn't reach YouTube. Check your connection or ad blocker.");document.head.appendChild(s)}
+let ytWarned=false;
+function loadYT(){if(ytAsked)return;ytAsked=true;const s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";s.async=true;
+  // the autopilot below retries a failed load, so the warning shows only once
+  s.onerror=()=>{s.remove();ytAsked=false;if(!ytWarned){ytWarned=true;toast("Can't reach YouTube yet. Retrying…")}};document.head.appendChild(s)}
+// Get YouTube ready on the first touch or key press, so pressing play starts the music without waiting.
+for(const ev of ["pointerdown","keydown"])addEventListener(ev,loadYT,{once:true,capture:true,passive:true});
 
-function load(ti,start){
-  const st=S[on],tr=st.tracks[ti];cur=ti;loadYT();
-  const f=()=>{yt.loadVideoById({videoId:tr[3],startSeconds:Math.max(0,Math.floor(start||0))});yt.setVolume(vol);yt.unMute()};
+// Each station plays as one looping YouTube playlist, in the station's shuffled order.
+// YouTube moves from song to song by itself, so the browser never asks for another tap.
+let list=[];
+function play(i,k,start){
+  const st=S[i];prep(st);on=i;playing=true;errs=0;pos=k;
+  list=st._o.slice(k).concat(st._o.slice(0,k)).slice(0,200);cur=list[0];
+  const ids=list.map(t=>st.tracks[t][3]);
+  loadYT();lastOk=Date.now();
+  const f=()=>{yt.loadPlaylist(ids,0,Math.max(0,Math.floor(start||0)));yt.setVolume(vol);yt.unMute()};
   ready?f():(queued=f);
-  updatePlayer();
-  clearTimeout(hintTimer);
-  hintTimer=setTimeout(()=>{if(playing&&ytState!==1&&ytState!==3)toast("Tap the video to start playback")},3500);
+  updateTune();updatePlayer();
 }
-function tune(i){
-  on=i;playing=true;errs=0;
-  const sp=live(S[i]);pos=sp.k;load(S[i]._o[pos],sp.off);
-  updateTune();
-}
+function tune(i){const sp=live(S[i]);play(i,sp.k,sp.off)}
 function playOnDemand(i,ti){
   if(sel!==i){sel=i;showStation()}
-  prep(S[i]);on=i;playing=true;errs=0;pos=S[i]._o.indexOf(ti);load(ti,0);updateTune();renderList();
+  prep(S[i]);play(i,S[i]._o.indexOf(ti),0);renderList();
 }
-function nextSong(){if(on<0)return;const st=S[on];pos=(pos+1)%st._o.length;load(st._o[pos],0)}
-function stop(){playing=false;clearTimeout(tuneTimer);if(ready)yt.pauseVideo();updateTune();updatePlayer()}
+function nextSong(){if(on<0||!ready)return;lastOk=Date.now();yt.nextVideo()}
+// keep the song shown on screen in step with what YouTube is playing
+function syncCur(){
+  if(!ready||!list.length)return;
+  const k=yt.getPlaylistIndex();
+  if(k>=0&&k<list.length&&list[k]!==cur){cur=list[k];pos=S[on]._o.indexOf(cur);updatePlayer();if(view==="demand")renderList()}
+}
+function stop(){playing=false;clearTimeout(tuneTimer);if(ready)yt.pauseVideo();letSleep();updateTune();updatePlayer()}
 function toggle(){if(playing&&on===sel)stop();else{staticBurst();tune(sel)}}
 function onState(e){
   ytState=e.data;
-  if(e.data===1){errs=0;if(!playing){playing=true;updateTune()}updatePlayer();startWave()}
+  if(e.data!==2)syncCur();
+  if(e.data===1){errs=0;hops=0;everPlayed=true;lastOk=Date.now();if(!playing){playing=true;updateTune()}updatePlayer();startWave();keepAwake()}
   else if(!raf)drawWave();
-  if(e.data===0&&playing)nextSong();
-  if(e.data===2&&playing&&document.visibilityState==="visible"){playing=false;updateTune();updatePlayer()}
+  // YouTube normally advances on its own. If it is still sitting at the end of a song, push it along.
+  if(e.data===0&&playing)setTimeout(()=>{if(playing&&ytState===0){if(yt.getPlaylistIndex()>=list.length-1)yt.playVideoAt(0);else yt.nextVideo()}},1500);
+  // Only the pause button stops the radio. Pauses from ads, hiccups or the browser are undone.
+  if(e.data===2&&playing)setTimeout(()=>{if(playing&&ytState===2&&ready)yt.playVideo()},300);
 }
-function onErr(){if(!playing)return;if(++errs>6){stop();toast("YouTube won't play these songs right now. Try another station.");return}nextSong()}
+// A song that won't play is skipped. If a whole station fails, hop to the next one.
+function onErr(){
+  if(!playing)return;
+  if(++errs<=5){nextSong();return}
+  if(++hops>=n){stop();toast("YouTube isn't playing anything right now. Press play to try again.");return}
+  const from=S[on].name;sel=on;go(1);toast(`${from} isn't available, switched to ${S[sel].name}`);
+}
+
+/* ---------- autopilot: keeps the radio going without the listener touching anything ---------- */
+let lastOk=0,lastT=-1,everPlayed=false,hops=0,lastHint=0;
+setInterval(()=>{
+  if(!playing)return;
+  if(!ready){if(!ytAsked)loadYT();return}            // YouTube failed to load: retry
+  const now=Date.now();
+  if(ytState===1){const t=yt.getCurrentTime()||0;if(t!==lastT){lastT=t;lastOk=now}}
+  if(document.hidden)return;                          // the browser paused us; picked up again on return
+  const stuck=now-lastOk;
+  if(stuck>4000&&ytState!==1&&ytState!==0)yt.playVideo();
+  if(!everPlayed){                                   // the browser blocked the first play (mostly iPhone)
+    if(stuck>5000&&now-lastHint>12000){lastHint=now;toast("Tap the video to start playback")}
+  }else if(stuck>25000){lastOk=now;nextSong()}       // stuck song or stalled stream: move on
+},2000);
+function resume(){if(!playing)return;lastOk=Date.now();keepAwake();startWave();if(ready&&ytState!==1)yt.playVideo()}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)resume()});
+addEventListener("online",resume);
+addEventListener("pageshow",e=>{if(e.persisted)resume()});
+
+// Keep the screen on while the radio plays, so phones and car screens don't lock and cut the music.
+let wl=null,wlBusy=false;
+async function keepAwake(){
+  if(wl||wlBusy||!navigator.wakeLock||document.hidden)return;
+  wlBusy=true;try{wl=await navigator.wakeLock.request("screen");wl.addEventListener("release",()=>{wl=null})}catch(e){}wlBusy=false;
+}
+function letSleep(){try{if(wl)wl.release()}catch(e){}wl=null}
 
 /* ---------- UI state ---------- */
 const ICO={play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15L20 12z"/></svg>',pause:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4.5v16H6zM13.5 4H18v16h-4.5z"/></svg>',x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'};
@@ -262,7 +309,7 @@ addEventListener("gamepadconnected",()=>{if(!gpRaf)gpRaf=requestAnimationFrame(p
 let tt=0;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),4200)}
 function sizePlayer(){document.documentElement.style.setProperty("--pb",mq.matches?($("player").offsetHeight+12)+"px":"0px")}
 let rz=0;addEventListener("resize",()=>{cancelAnimationFrame(rz);rz=requestAnimationFrame(()=>{M=null;layout();sizePlayer();WG=null;drawWave()})});
-document.addEventListener("visibilitychange",()=>{if(!document.hidden&&playing)startWave()});
+
 if(!n){$("stName").textContent="No stations loaded";return}
 showStation();updatePlayer();updateTune();sizePlayer();drawWave();
 if(document.fonts)document.fonts.ready.then(()=>{M=null;layout();sizePlayer()});
