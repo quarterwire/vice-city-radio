@@ -171,14 +171,18 @@ function play(i,k,start){
   const st=S[i];prep(st);on=i;playing=true;errs=0;pos=k;
   list=order(st,k);cur=list[0];
   const ids=list.map(t=>st.tracks[t][3]);
-  loadYT();lastOk=Date.now();
-  const w=warm;warm=null;
-  if(w&&ready&&w.i===i&&w.k===k){yt.seekTo(Math.floor(start||0),true);yt.setVolume(vol);yt.unMute();yt.playVideo();updateTune();updatePlayer();return}
+  loadYT();lastOk=Date.now();warm=null;
   const f=()=>{yt.loadPlaylist(ids,0,Math.max(0,Math.floor(start||0)));yt.setVolume(vol);yt.unMute()};
   ready?f():(queued=f);
   updateTune();updatePlayer();
 }
-function tune(i){const sp=live(S[i]);play(i,sp.k,sp.off)}
+// Play the warmed-up stream from where it already is: no jump ahead, no second buffering, sound right away.
+function useWarm(){
+  const w=warm;warm=null;const st=S[w.i];prep(st);on=w.i;playing=true;errs=0;pos=w.k;list=order(st,w.k);
+  const pk=Math.max(0,yt.getPlaylistIndex());cur=pk<list.length?list[pk]:list[0];lastOk=Date.now();
+  yt.setVolume(vol);yt.unMute();yt.playVideo();updateTune();updatePlayer();
+}
+function tune(i){if(warm&&warm.i===i)return useWarm();const sp=live(S[i]);play(i,sp.k,sp.off)}
 function playOnDemand(i,ti){
   if(sel!==i){sel=i;showStation()}
   prep(S[i]);play(i,S[i]._o.indexOf(ti),0);renderList();
@@ -216,6 +220,7 @@ function onErr(){
 /* ---------- autopilot: keeps the radio going without the listener touching anything ---------- */
 let lastOk=0,lastT=-1,everPlayed=false,hops=0,lastHint=0;
 setInterval(()=>{
+  if(warm&&!playing&&ready&&ytState===1){yt.pauseVideo();return}  // warm-up kept playing (e.g. after an ad): pause it, don't burn data
   if(!playing)return;
   if(!ready){if(!ytAsked)loadYT();return}            // YouTube failed to load: retry
   if(!navigator.onLine){lastOk=Date.now();return}      // tunnel or dead zone: hold, 'online' picks it back up
