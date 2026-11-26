@@ -55,7 +55,7 @@ The site has no server, accounts or user data, so the realistic risk is someone 
 ### What the site does to protect visitors
 
 - **Content Security Policy.** A meta tag only allows scripts from the site itself and YouTube's player API, and frames only from YouTube. All code lives in `app.js`, so the policy can block every inline script. GitHub Pages can't send custom headers, so the policy is set in the page.
-- **Nothing third-party loads until play.** The font is self-hosted. YouTube's player only loads when the listener presses play, and it uses the privacy-enhanced `youtube-nocookie.com` domain.
+- **Nothing third-party loads until play.** The font is self-hosted. YouTube's player only loads after the listener first taps or presses a key, and it uses the privacy-enhanced `youtube-nocookie.com` domain.
 - **Escaped data.** Station and song text is HTML-escaped before it reaches the page.
 - **Checked storage.** Saved settings are type-checked when read back, because every repo under `<user>.github.io` shares the same local storage.
 
