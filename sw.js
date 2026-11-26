@@ -9,7 +9,7 @@ const FILES = ["./", "app.js", "stations.js", "legal.html", "bg/street.webp", "b
   ...LOGOS.map((l) => `logos/${l}.webp`)];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {
@@ -17,6 +17,7 @@ self.addEventListener("activate", (e) => {
     .then(() => self.clients.claim()));
 });
 
+// Install reuses what the browser already downloaded (no second download over a weak signal).
 // Serve from the cache straight away, and refresh the cached copy in the background when there is signal.
 self.addEventListener("fetch", (e) => {
   const req = e.request;
