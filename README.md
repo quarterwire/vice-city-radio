@@ -93,7 +93,7 @@ To keep the fan-project risk low:
 
 - Phones stop YouTube audio when the screen locks or the browser goes to the background. While the radio plays, the site keeps the screen awake to prevent that.
 - YouTube plays ads before some songs, and the site can't skip them. While the page is open and idle, the warm-up plays the first ad silently.
-- YouTube chooses the video quality itself, usually 360p to 480p. Its adaptive streaming lowers it when the signal is weak, but the embed doesn't let the site force the lowest quality. On a weak signal, expect roughly 4 to 8 MB of data per song.
+- YouTube chooses the video quality itself, usually 360p to 480p. Its adaptive streaming lowers it when the signal is weak, but the embed doesn't let the site force the lowest quality. At 360p a four-minute song uses roughly 10 to 15 MB of data, and less when YouTube lowers the quality.
 - iPhones sometimes block the first play. If nothing starts, tap the small video in the player.
 - The talk stations The Wipe and WKTT are left out because their shows aren't on YouTube.
 - 44 tracks had no good YouTube match and are skipped. These include fictional in-game songs such as Liquid Wilson's.
