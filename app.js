@@ -144,7 +144,7 @@ function live(st){
 let yt=null,ready=false,queued=null;
 window.onYouTubeIframeAPIReady=()=>{
   yt=new YT.Player("yt",{host:"https://www.youtube-nocookie.com",width:"100%",height:"100%",playerVars:{origin:location.origin,playsinline:1,controls:0,disablekb:1,rel:0,iv_load_policy:3,fs:0,modestbranding:1},
-    events:{onReady:()=>{ready=true;yt.setVolume(vol);yt.setLoop(true);if(queued){const q=queued;queued=null;q()}},onStateChange:onState,onError:onErr}});
+    events:{onReady:()=>{ready=true;yt.setVolume(vol);yt.setLoop(true);if(queued){const q=queued;queued=null;q()}else warmUp()},onStateChange:onState,onError:onErr}});
 };
 let ytAsked=false;
 let ytWarned=false;
@@ -158,11 +158,22 @@ for(const ev of ["pointerdown","keydown"])addEventListener(ev,loadYT,{once:true,
 // Each station plays as one looping YouTube playlist, in the station's shuffled order.
 // YouTube moves from song to song by itself, so the browser never asks for another tap.
 let list=[];
+const order=(st,k)=>st._o.slice(k).concat(st._o.slice(0,k)).slice(0,200);
+// Warm-up: on a slow connection YouTube needs many seconds to buffer. While the page sits open, the shown
+// station buffers silently (muted, then paused), so pressing play starts almost at once. Off when saving data.
+let warm=null;
+function warmUp(){
+  if(playing||warm||(navigator.connection&&navigator.connection.saveData))return;
+  const st=S[sel],sp=live(st);warm={i:sel,k:sp.k};
+  yt.mute();yt.loadPlaylist(order(st,sp.k).map(t=>st.tracks[t][3]),0,Math.floor(sp.off));
+}
 function play(i,k,start){
   const st=S[i];prep(st);on=i;playing=true;errs=0;pos=k;
-  list=st._o.slice(k).concat(st._o.slice(0,k)).slice(0,200);cur=list[0];
+  list=order(st,k);cur=list[0];
   const ids=list.map(t=>st.tracks[t][3]);
   loadYT();lastOk=Date.now();
+  const w=warm;warm=null;
+  if(w&&ready&&w.i===i&&w.k===k){yt.seekTo(Math.floor(start||0),true);yt.setVolume(vol);yt.unMute();yt.playVideo();updateTune();updatePlayer();return}
   const f=()=>{yt.loadPlaylist(ids,0,Math.max(0,Math.floor(start||0)));yt.setVolume(vol);yt.unMute()};
   ready?f():(queued=f);
   updateTune();updatePlayer();
@@ -183,6 +194,7 @@ function stop(){playing=false;clearTimeout(tuneTimer);if(ready)yt.pauseVideo();l
 function toggle(){if(playing&&on===sel)stop();else{staticBurst();tune(sel)}}
 function onState(e){
   ytState=e.data;
+  if(warm&&!playing){if(e.data===1)yt.pauseVideo();return}   // warm-up: buffer, don't play
   if(e.data!==2)syncCur();
   if(e.data===1){errs=0;hops=0;everPlayed=true;lastOk=Date.now();if(!playing){playing=true;updateTune()}updatePlayer();startWave();keepAwake()}
   else if(!raf)drawWave();
