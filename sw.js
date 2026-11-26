@@ -1,6 +1,6 @@
 /* Offline cache for the site's own files. Repeat visits open instantly, even with weak or no signal.
    Only same-origin files are cached. YouTube is never touched. tools/deploy.sh stamps VERSION on every deploy. */
-const VERSION = "cbc6403";
+const VERSION = "5077fe8";
 const CACHE = "vcr-" + VERSION;
 const LOGOS = ["afrobank","backcountry","chamber","circoloco","cocoteo","dirtysouth","emotion","flash","gloriana","honey",
   "kaleidoscope","laola","ljr","onu","stockyard","symphony","vcrr","vicecityfm","vrock","worldwide"];
