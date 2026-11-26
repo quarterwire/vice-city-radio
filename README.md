@@ -16,6 +16,7 @@ The published site is only these files, about 480 KB on disk. A visitor download
 ```
 index.html    page and styles
 app.js        player code
+sw.js         offline cache, so repeat visits open instantly on a weak signal
 legal.html    disclaimer, privacy notice, takedown contact, credits
 stations.js   station data
 logos/        20 station logos as small WebP files
@@ -55,7 +56,7 @@ The site has no server, accounts or user data, so the realistic risk is someone 
 ### What the site does to protect visitors
 
 - **Content Security Policy.** A meta tag only allows scripts from the site itself and YouTube's player API, and frames only from YouTube. All code lives in `app.js`, so the policy can block every inline script. GitHub Pages can't send custom headers, so the policy is set in the page.
-- **Nothing third-party loads until play.** The font is self-hosted. YouTube's player only loads after the listener first taps or presses a key, and it uses the privacy-enhanced `youtube-nocookie.com` domain.
+- **No third-party fonts or trackers.** The font is self-hosted. YouTube's player loads once the page is up, so play starts fast on slow networks, and it uses the privacy-enhanced `youtube-nocookie.com` domain.
 - **Escaped data.** Station and song text is HTML-escaped before it reaches the page.
 - **Checked storage.** Saved settings are type-checked when read back, because every repo under `<user>.github.io` shares the same local storage.
 

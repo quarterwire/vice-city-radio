@@ -151,7 +151,8 @@ let ytWarned=false;
 function loadYT(){if(ytAsked)return;ytAsked=true;const s=document.createElement("script");s.src="https://www.youtube.com/iframe_api";s.async=true;
   // the autopilot below retries a failed load, so the warning shows only once
   s.onerror=()=>{s.remove();ytAsked=false;if(!ytWarned){ytWarned=true;toast("Can't reach YouTube yet. Retrying…")}};document.head.appendChild(s)}
-// Get YouTube ready on the first touch or key press, so pressing play starts the music without waiting.
+// Get YouTube ready as soon as the page is up (or on the first touch), so play starts without a wait on slow networks.
+addEventListener("load",()=>setTimeout(loadYT,300),{once:true});
 for(const ev of ["pointerdown","keydown"])addEventListener(ev,loadYT,{once:true,capture:true,passive:true});
 
 // Each station plays as one looping YouTube playlist, in the station's shuffled order.
@@ -191,8 +192,10 @@ function onState(e){
   if(e.data===2&&playing)setTimeout(()=>{if(playing&&ytState===2&&ready)yt.playVideo()},300);
 }
 // A song that won't play is skipped. If a whole station fails, hop to the next one.
+let errOffline=false;
 function onErr(){
   if(!playing)return;
+  if(!navigator.onLine){errOffline=true;lastOk=Date.now();return}   // no signal: wait for it, don't burn through songs
   if(++errs<=5){nextSong();return}
   if(++hops>=n){stop();toast("YouTube isn't playing anything right now. Press play to try again.");return}
   const from=S[on].name;sel=on;go(1);toast(`${from} isn't available, switched to ${S[sel].name}`);
@@ -203,16 +206,18 @@ let lastOk=0,lastT=-1,everPlayed=false,hops=0,lastHint=0;
 setInterval(()=>{
   if(!playing)return;
   if(!ready){if(!ytAsked)loadYT();return}            // YouTube failed to load: retry
+  if(!navigator.onLine){lastOk=Date.now();return}      // tunnel or dead zone: hold, 'online' picks it back up
   const now=Date.now();
   if(ytState===1){const t=yt.getCurrentTime()||0;if(t!==lastT){lastT=t;lastOk=now}}
   if(document.hidden)return;                          // the browser paused us; picked up again on return
   const stuck=now-lastOk;
-  if(stuck>4000&&ytState!==1&&ytState!==0)yt.playVideo();
+  if(stuck>4000&&ytState!==1&&ytState!==0&&ytState!==3)yt.playVideo();
   if(!everPlayed){                                   // the browser blocked the first play (mostly iPhone)
     if(stuck>5000&&now-lastHint>12000){lastHint=now;toast("Tap the video to start playback")}
-  }else if(stuck>25000){lastOk=now;nextSong()}       // stuck song or stalled stream: move on
+  }else if(stuck>(ytState===3?90000:25000)){lastOk=now;nextSong()}  // stuck song: move on. Slow buffering gets longer.
 },2000);
-function resume(){if(!playing)return;lastOk=Date.now();keepAwake();startWave();if(ready&&ytState!==1)yt.playVideo()}
+function resume(){if(!playing)return;lastOk=Date.now();keepAwake();startWave();if(!ready)return;
+  if(errOffline){errOffline=false;yt.playVideoAt(Math.max(0,yt.getPlaylistIndex()))}else if(ytState!==1)yt.playVideo()}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)resume()});
 addEventListener("online",resume);
 addEventListener("pageshow",e=>{if(e.persisted)resume()});
@@ -313,4 +318,6 @@ let rz=0;addEventListener("resize",()=>{cancelAnimationFrame(rz);rz=requestAnima
 if(!n){$("stName").textContent="No stations loaded";return}
 showStation();updatePlayer();updateTune();sizePlayer();drawWave();
 if(document.fonts)document.fonts.ready.then(()=>{M=null;layout();sizePlayer()});
+/* cache the site on the device: instant repeat visits, and it still opens with weak or no signal */
+if("serviceWorker"in navigator&&location.protocol==="https:")addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 })();

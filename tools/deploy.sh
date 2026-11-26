@@ -4,13 +4,16 @@
 set -euo pipefail
 repo=$(git rev-parse --show-toplevel)
 cd "$repo"
-files="index.html legal.html app.js stations.js logos bg fonts"
+files="index.html legal.html app.js sw.js stations.js logos bg fonts"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/site"
 git archive HEAD $files | tar -x -C "$tmp/site"
 touch "$tmp/site/.nojekyll"   # serve files as-is, no Jekyll processing
+# new cache version per deploy, so visitors' devices pick up the update
+sed -i "s/^const VERSION = \"dev\";/const VERSION = \"$(git rev-parse --short HEAD)\";/" "$tmp/site/sw.js"
+grep -q "^const VERSION = \"$(git rev-parse --short HEAD)\";" "$tmp/site/sw.js" || { echo "Could not stamp sw.js"; exit 1; }
 
 # refuse to publish anything unexpected
 bad=$(cd "$tmp/site" && find . -type f ! -name '*.html' ! -name '*.js' ! -name '*.webp' ! -name '*.woff2' ! -name 'OFL.txt' ! -name '.nojekyll')
