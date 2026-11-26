@@ -1,0 +1,24 @@
+# build inputs and scratch output from tools/
+wiki.txt
+stations_raw.js
+logos_raw/
+_site/
+__pycache__/
+*.pyc
+
+# local editor and agent state
+.impeccable/
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# secrets never belong in this repo
+.env
+.env.*
+*.pem
+*.key
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
