@@ -331,5 +331,6 @@ if(!n){$("stName").textContent="No stations loaded";return}
 showStation();updatePlayer();updateTune();sizePlayer();drawWave();
 if(document.fonts)document.fonts.ready.then(()=>{M=null;layout();sizePlayer()});
 /* cache the site on the device: instant repeat visits, and it still opens with weak or no signal */
-if("serviceWorker"in navigator&&location.protocol==="https:")addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+// set up later, so it never competes with the music for bandwidth on the first visit
+if("serviceWorker"in navigator&&location.protocol==="https:")addEventListener("load",()=>setTimeout(()=>navigator.serviceWorker.register("sw.js").catch(()=>{}),20000));
 })();
